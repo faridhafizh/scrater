@@ -1,0 +1,87 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Source {
+  id          String         @id @default(uuid())
+  name        String
+  type        String         // "marketplace" | "social"
+  region      String         // e.g. "US", "GLOBAL", "SEA"
+  enabled     Boolean        @default(true)
+  schedule    String         @default("0 7 * * *") // Cron string (e.g., daily at 7 AM)
+  last_run_at DateTime?
+  status      String         @default("idle") // "idle" | "running" | "success" | "failed"
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  items       TrendingItem[]
+  scrapeJobs  ScrapeJob[]
+}
+
+model TrendingItem {
+  id                  String       @id @default(uuid())
+  source_id           String
+  external_id         String?
+  name                String
+  category            String?
+  normalized_category String       @default("General")
+  price               Float?
+  currency            String       @default("USD")
+  image_url           String?
+  product_url         String?
+  popularity_signal   String?      // e.g. "#1 Best Seller", "15,000 Sales/mo", "50k mentions"
+  rank                Int?
+  scraped_at          DateTime     @default(now())
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  source              Source       @relation(fields: [source_id], references: [id], onDelete: Cascade)
+  trendScores         TrendScore[]
+
+  @@index([source_id])
+  @@index([normalized_category])
+  @@index([scraped_at])
+}
+
+model TrendScore {
+  id                   String       @id @default(uuid())
+  item_id              String
+  score                Float
+  computed_at          DateTime     @default(now())
+  contributing_sources String       // JSON string of source names/ids
+
+  item                 TrendingItem @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@index([item_id])
+  @@index([score])
+}
+
+model Report {
+  id           String   @id @default(uuid())
+  generated_at DateTime @default(now())
+  scope        String   // JSON string specifying sources, categories, date range
+  status       String   @default("pending") // "pending" | "processing" | "completed" | "failed"
+  file_path    String?
+  item_count   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ScrapeJob {
+  id            String    @id @default(uuid())
+  source_id     String
+  started_at    DateTime  @default(now())
+  finished_at   DateTime?
+  status        String    @default("running") // "running" | "success" | "failed"
+  items_found   Int       @default(0)
+  error_message String?
+
+  source        Source    @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+  @@index([source_id])
+}
